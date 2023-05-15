@@ -1,18 +1,22 @@
 package com.nikolis.apigateway.configurations;
 
-import com.nikolis.apigateway.components.ProxyClientAddressResolver;
-import com.nikolis.apigateway.components.SimpleClientAddressResolver;
+
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+import org.springframework.cloud.gateway.support.ipresolver.XForwardedRemoteAddressResolver;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import reactor.core.publisher.Mono;
 
 import java.awt.print.Book;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.util.Optional;
 
 @Configuration
 public class ApiGatewayConfiguration {
@@ -26,11 +30,11 @@ public class ApiGatewayConfiguration {
                 .route("route_2", p -> p
                         .path("/recommendation-service/**")
                         .filters(f -> f.requestRateLimiter(r -> r
-                                .setRateLimiter(redisRateLimiter())
-                                .setDenyEmptyKey(false)
-                                .setKeyResolver(new SimpleClientAddressResolver())
-                                .setKeyResolver(new ProxyClientAddressResolver())
-
+                                        .setRateLimiter(redisRateLimiter())
+                                        .setKeyResolver(proxyClientAddressResolver())
+                                        .setKeyResolver(keyResolver())
+                                        .setKeyResolver(simpleClientAddressResolver())
+                                        .setDenyEmptyKey(false)
                         ))
                         .uri("lb://recommendation-service")
                 )
@@ -45,6 +49,21 @@ public class ApiGatewayConfiguration {
     @Bean
     public KeyResolver keyResolver() {
         return exchange -> Mono.just(exchange.getRequest().getRemoteAddress().getAddress().getHostAddress());
+    }
+
+    @Bean
+    public KeyResolver simpleClientAddressResolver() {
+        return exchange -> Optional.ofNullable(exchange.getRequest().getRemoteAddress())
+                .map(InetSocketAddress::getAddress)
+                .map(InetAddress::getHostAddress)
+                .map(Mono::just)
+                .orElse(Mono.empty());
+    }
+
+    @Bean
+    @Primary
+    public KeyResolver proxyClientAddressResolver() {
+        return exchange -> Mono.just(XForwardedRemoteAddressResolver.maxTrustedIndex(1).resolve(exchange).getAddress().getHostAddress());
     }
 
 
