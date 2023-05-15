@@ -60,6 +60,10 @@ public class ApiGatewayConfiguration {
                 .orElse(Mono.empty());
     }
 
+    /**
+     * In case we use Proxy server for our clients
+     * @return The Key
+     */
     @Bean
     @Primary
     public KeyResolver proxyClientAddressResolver() {
